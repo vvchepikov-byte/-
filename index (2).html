@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Тренировочный дашборд</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#12151c; --panel:#181c26; --panel2:#1f2431; --line:#2a3040;
+    --ink:#eef1f6; --mut:#8b93a7; --dim:#5c6479;
+    --lime:#c6f24e; --lime-dim:#8fae35; --blue:#5b9dff; --red:#ff5d5d; --amber:#ffb454;
+    --shadow:0 10px 40px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif}
+  body{padding:16px;max-width:1100px;margin:0 auto;-webkit-tap-highlight-color:transparent}
+  h1,h2,h3{font-family:'Barlow Semi Condensed',sans-serif;margin:0;letter-spacing:-.01em}
+  .num{font-family:'Barlow Semi Condensed',sans-serif;font-variant-numeric:tabular-nums}
+
+  /* Header */
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand .dot{width:12px;height:12px;border-radius:3px;background:var(--lime);box-shadow:0 0 16px var(--lime)}
+  .brand h1{font-size:22px;font-weight:800;text-transform:uppercase}
+  .brand span{color:var(--mut);font-size:12px;display:block;font-family:'Inter';text-transform:none;letter-spacing:0}
+  .refresh{display:flex;align-items:center;gap:8px;background:var(--lime);color:#10130a;border:none;
+    font-family:'Barlow Semi Condensed';font-weight:700;font-size:14px;padding:10px 16px;border-radius:10px;cursor:pointer;
+    text-transform:uppercase;letter-spacing:.02em;transition:transform .1s ease, filter .15s ease}
+  .refresh:active{transform:scale(.96)}
+  .refresh:disabled{filter:grayscale(.5) brightness(.8);cursor:default}
+  .refresh svg{width:16px;height:16px}
+  .updated{color:var(--dim);font-size:11px;text-align:right;margin:-8px 2px 14px}
+
+  /* Split status strip — the hero: what to train next */
+  .splits{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+  .split{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;position:relative;overflow:hidden}
+  .split .bar{position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--dim)}
+  .split.ok .bar{background:var(--lime)} .split.due .bar{background:var(--red)}
+  .split h3{font-size:15px;font-weight:700;margin-bottom:8px;padding-left:6px}
+  .split .big{font-size:30px;font-weight:800;line-height:1;padding-left:6px}
+  .split .big.due{color:var(--red)} .split .big.ok{color:var(--lime)}
+  .split .sub{color:var(--mut);font-size:12px;padding-left:6px;margin-top:4px}
+  .split .tag{position:absolute;top:12px;right:12px;font-size:10px;font-weight:700;text-transform:uppercase;
+    padding:3px 7px;border-radius:20px;font-family:'Barlow Semi Condensed';letter-spacing:.04em}
+  .tag.ok{background:rgba(198,242,78,.14);color:var(--lime)} .tag.due{background:rgba(255,93,93,.14);color:var(--red)}
+
+  /* Controls */
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+  .ctl{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .ctl label{display:block;color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;font-weight:600}
+  .ctl select{width:100%;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;
+    padding:9px 10px;font-size:14px;font-family:'Inter';appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%238b93a7' viewBox='0 0 16 16'><path d='M4 6l4 4 4-4'/></svg>");
+    background-repeat:no-repeat;background-position:right 10px center}
+  .ctl.wide{grid-column:1/-1}
+
+  /* Panels */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+  .panel h2{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);font-weight:700;margin-bottom:14px}
+  .panel h2 b{color:var(--ink)}
+
+  /* Exercise KPI row */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+  .kpi{background:var(--panel2);border-radius:10px;padding:12px}
+  .kpi .k{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;font-weight:600}
+  .kpi .v{font-size:24px;font-weight:800;line-height:1}
+  .kpi .v.up{color:var(--lime)} .kpi .v.down{color:var(--red)}
+
+  /* Day session table */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--dim);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.05em;
+    padding:8px 6px;border-bottom:1px solid var(--line)}
+  td{padding:10px 6px;border-bottom:1px solid var(--line);color:var(--ink)}
+  td.n{font-family:'Barlow Semi Condensed';font-variant-numeric:tabular-nums;font-weight:600}
+  tr:last-child td{border-bottom:none}
+  .exname{font-weight:600}
+  .chip{display:inline-block;background:var(--panel2);color:var(--mut);border-radius:6px;padding:2px 7px;font-size:11px;
+    font-family:'Barlow Semi Condensed';font-weight:600;margin-left:2px}
+
+  .chartwrap{position:relative;height:280px}
+  .empty{color:var(--dim);text-align:center;padding:30px 10px;font-size:14px}
+  .foot{color:var(--dim);font-size:11px;text-align:center;padding:8px 0 20px}
+  .err{background:rgba(255,93,93,.12);border:1px solid rgba(255,93,93,.4);color:#ffb4b4;border-radius:10px;padding:12px;margin-bottom:14px;font-size:13px}
+
+  @media (max-width:640px){
+    .splits{grid-template-columns:1fr}
+    .controls{grid-template-columns:1fr}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .brand h1{font-size:19px}
+  }
+  .spin{animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+  <!-- ────────── КОНФИГ: сюда вставь URL веб-приложения и токен ────────── -->
+  <script>
+    const CONFIG = {
+      API_URL: 'https://script.google.com/macros/s/AKfycbwZm5D15AbP2QEgqFuSJA3Fab9k-lbezFiMFk7uz6nAMf34BKBXBV41RACRTscZj3zW/exec',   // …/exec из Apps Script
+      TOKEN:   '4ebb626f85a74f80aa37e877215c89dc',                 // из setApiToken()
+      // Пороги
+      DUE_DAYS: 5,                                   // сплит "пора" если дней больше
+      // Сплиты — те же группы, что в таблице (по нормализованным именам).
+      SPLITS: {
+        '🏋️ Спина + Бицепс': ['Вертикальная тяга','Тяга обратным хватом','Тяга горизонтального блока','Тяга прямыми руками','Вертикальная рычажная тяга (Тренажёр)','Вертикальная тяга (Гантель)','Тяга гантели','Тяга к лицу','Задняя дельта','Обратная разводка на задние дельты (Тренажёр)','Сгибание на скамье Скотта','Молоток','Сгибание рук прямым хватом','Сгибание рук на бицепс (Гантель)','Концентрированное сгибание'],
+        '🥊 Грудь + Трицепс + Плечи': ['Жим гантелей на наклонной','Жим лежа (Гантели)','Пек-дек','Жим от груди в тренажёре','Жим на плечи','Тяга к подбородку','Боковой подъем (Тренажёр)','Разгибание на трицепс','Жим на трицепс','Отжимания на трицепс','Разгибание рук из-за головы (Блок)','Разгибание рук на трицепс с канатом (блок)'],
+        '🍗 Ноги + Пресс': ['Румынская тяга','Жим ногами','Горизонтальный жим ногами (Тренажёр)','Разгибание ног','Сгибание ног лежа (Тренажёр)','Присед (Тренажёр)','Подъем носков стоя (Тренажёр)','Подъем на носки сидя','Разгибание спины (Гиперэкстензия с отягощением)','Пресс','Русские скручивания (С весом)']
+      }
+    };
+  </script>
+
+  <header>
+    <div class="brand">
+      <div class="dot"></div>
+      <div>
+        <h1>Прогресс</h1>
+        <span>тренировочный дашборд</span>
+      </div>
+    </div>
+    <button class="refresh" id="refreshBtn" onclick="loadData()">
+      <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 11A8 8 0 1 0 4 13"/><path d="M20 4v7h-7"/></svg>
+      Обновить
+    </button>
+  </header>
+  <div class="updated" id="updated"></div>
+
+  <div id="errbox"></div>
+
+  <!-- Сплиты — что пора тренировать -->
+  <section class="splits" id="splits"></section>
+
+  <!-- Переключатели -->
+  <section class="controls">
+    <div class="ctl">
+      <label>Упражнение</label>
+      <select id="selExercise" onchange="renderExercise()"></select>
+    </div>
+    <div class="ctl">
+      <label>День тренировки</label>
+      <select id="selDate" onchange="renderDay()"></select>
+    </div>
+  </section>
+
+  <!-- Прогресс по упражнению -->
+  <section class="panel">
+    <h2>Прогресс — <b id="exTitle">—</b></h2>
+    <div class="kpis" id="exKpis"></div>
+    <div class="chartwrap"><canvas id="exChart"></canvas></div>
+  </section>
+
+  <!-- Тренировка за день -->
+  <section class="panel">
+    <h2>Тренировка за <b id="dayTitle">—</b></h2>
+    <div id="dayBody"></div>
+  </section>
+
+  <div class="foot">Данные из Hevy → Google Sheets. Обновляется по кнопке.</div>
+
+<script>
+let RAW = [];          // сырые строки-подходы
+let exChart = null;
+
+/* ---------- утилиты ---------- */
+function e1rm(w,r){ return w && r ? w*(1+r/30) : 0; }
+function fmtDate(iso){ const d=new Date(iso); const p=n=>('0'+n).slice(-2); return p(d.getDate())+'.'+p(d.getMonth()+1)+'.'+d.getFullYear(); }
+function daysAgo(iso){ return Math.floor((Date.now()-new Date(iso))/86400000); }
+function kg(v){ return Math.round(v).toLocaleString('ru-RU')+' кг'; }
+function round1(v){ return Math.round(v*10)/10; }
+function uniq(a){ return [...new Set(a)]; }
+
+/* ---------- загрузка ---------- */
+async function loadData(){
+  const btn=document.getElementById('refreshBtn'), icon=document.getElementById('refreshIcon');
+  const err=document.getElementById('errbox');
+  err.innerHTML='';
+  btn.disabled=true; icon.classList.add('spin');
+  try{
+    if(CONFIG.API_URL.startsWith('ВСТАВЬ')) throw new Error('Не заполнен API_URL/TOKEN в начале файла.');
+    const url=CONFIG.API_URL+'?token='+encodeURIComponent(CONFIG.TOKEN);
+    const res=await fetch(url);
+    const data=await res.json();
+    if(data.error) throw new Error(data.error==='unauthorized'?'Неверный токен доступа.':data.error);
+    RAW=(data.rows||[]).map(x=>({ ...x, e1:e1rm(x.weight,x.reps) }));
+    if(!RAW.length) throw new Error('Данных пока нет — синхронизируй Hevy в таблице.');
+    document.getElementById('updated').textContent='Обновлено: '+new Date(data.updated).toLocaleString('ru-RU');
+    buildAll();
+  }catch(e){
+    err.innerHTML='<div class="err">⚠️ '+e.message+'</div>';
+  }finally{
+    btn.disabled=false; icon.classList.remove('spin');
+  }
+}
+
+/* ---------- построение ---------- */
+function buildAll(){
+  renderSplits();
+  fillSelectors();
+  renderExercise();
+  renderDay();
+}
+
+function lastDateForExercises(list){
+  let last=null;
+  for(const x of RAW){ if(list.includes(x.exercise)){ if(!last||x.date>last) last=x.date; } }
+  return last;
+}
+
+function renderSplits(){
+  const box=document.getElementById('splits'); box.innerHTML='';
+  for(const [name,list] of Object.entries(CONFIG.SPLITS)){
+    const last=lastDateForExercises(list);
+    const d = last? daysAgo(last) : null;
+    const due = d===null || d>CONFIG.DUE_DAYS;
+    const el=document.createElement('div');
+    el.className='split '+(due?'due':'ok');
+    el.innerHTML=`
+      <div class="bar"></div>
+      <span class="tag ${due?'due':'ok'}">${due?'пора':'свежо'}</span>
+      <h3>${name}</h3>
+      <div class="big ${due?'due':'ok'}">${d===null?'—':d}<span style="font-size:14px;color:var(--mut);font-weight:600"> ${d===null?'':'дн. назад'}</span></div>
+      <div class="sub">${last? 'последняя: '+fmtDate(last) : 'нет данных'}</div>`;
+    box.appendChild(el);
+  }
+}
+
+function fillSelectors(){
+  const exs=uniq(RAW.map(x=>x.exercise)).sort((a,b)=>a.localeCompare(b,'ru'));
+  const dates=uniq(RAW.map(x=>x.date)).sort().reverse();
+  const se=document.getElementById('selExercise'); se.innerHTML='';
+  exs.forEach(e=>{ const o=document.createElement('option'); o.value=e; o.textContent=e; se.appendChild(o); });
+  const sd=document.getElementById('selDate'); sd.innerHTML='';
+  dates.forEach(d=>{ const o=document.createElement('option'); o.value=d; o.textContent=fmtDate(d); sd.appendChild(o); });
+}
+
+/* ----- панель упражнения ----- */
+function renderExercise(){
+  const ex=document.getElementById('selExercise').value;
+  document.getElementById('exTitle').textContent=ex||'—';
+  const rows=RAW.filter(x=>x.exercise===ex);
+  if(!rows.length){ document.getElementById('exKpis').innerHTML=''; drawExChart([]); return; }
+
+  // агрегируем по дню: макс вес, лучший e1RM, тоннаж
+  const byDay={};
+  rows.forEach(x=>{
+    if(!byDay[x.date]) byDay[x.date]={date:x.date,maxW:x.weight,best:x.e1,vol:x.volume,reps:x.reps};
+    else{ const e=byDay[x.date]; if(x.weight>e.maxW){e.maxW=x.weight;e.reps=x.reps;} e.best=Math.max(e.best,x.e1); e.vol+=x.volume; }
+  });
+  const days=Object.values(byDay).sort((a,b)=>a.date<b.date?-1:1);
+  const first=days[0], last=days[days.length-1];
+  const bestEver=Math.max(...days.map(d=>d.best));
+  const growth=first.best? Math.round((last.best-first.best)/first.best*100):0;
+
+  const kpi=(k,v,cls='')=>`<div class="kpi"><div class="k">${k}</div><div class="v ${cls}">${v}</div></div>`;
+  document.getElementById('exKpis').innerHTML=
+    kpi('Тренировок', days.length)+
+    kpi('Текущий e1RM', round1(last.best)+' кг')+
+    kpi('Лучший e1RM', round1(bestEver)+' кг')+
+    kpi('Рост за всё время',(growth>=0?'+':'')+growth+'%', growth>=0?'up':'down');
+
+  drawExChart(days);
+}
+
+function drawExChart(days){
+  const ctx=document.getElementById('exChart');
+  if(exChart){ exChart.destroy(); exChart=null; }
+  if(!days.length){ return; }
+  const labels=days.map(d=>fmtDate(d.date));
+  const grid='#2a3040', mut='#8b93a7';
+  exChart=new Chart(ctx,{
+    data:{
+      labels,
+      datasets:[
+        { type:'bar', label:'Тоннаж, кг', data:days.map(d=>Math.round(d.vol)), yAxisID:'y',
+          backgroundColor:'rgba(91,157,255,.35)', borderColor:'#5b9dff', borderWidth:1, borderRadius:4, order:2 },
+        { type:'line', label:'e1RM, кг', data:days.map(d=>round1(d.best)), yAxisID:'y1',
+          borderColor:'#c6f24e', backgroundColor:'#c6f24e', borderWidth:3, tension:.25,
+          pointRadius:4, pointBackgroundColor:'#c6f24e', order:1 }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{labels:{color:mut,font:{family:'Inter'},usePointStyle:true,boxWidth:8}} },
+      scales:{
+        x:{ ticks:{color:mut,maxRotation:45,minRotation:0}, grid:{color:grid} },
+        y:{ position:'left', title:{display:true,text:'Тоннаж',color:'#5b9dff'}, ticks:{color:mut}, grid:{color:grid} },
+        y1:{ position:'right', title:{display:true,text:'e1RM',color:'#c6f24e'}, ticks:{color:mut}, grid:{drawOnChartArea:false} }
+      }
+    }
+  });
+}
+
+/* ----- панель дня ----- */
+function renderDay(){
+  const day=document.getElementById('selDate').value;
+  document.getElementById('dayTitle').textContent=day?fmtDate(day):'—';
+  const rows=RAW.filter(x=>x.date===day);
+  const body=document.getElementById('dayBody');
+  if(!rows.length){ body.innerHTML='<div class="empty">Нет данных за этот день.</div>'; return; }
+
+  const byEx={};
+  rows.forEach(x=>{ (byEx[x.exercise]=byEx[x.exercise]||[]).push(x); });
+  let dayVol=0;
+  let html='<table><thead><tr><th>Упражнение</th><th>Вес</th><th>Повторы</th><th>Подх.</th><th>Тоннаж</th><th>e1RM</th></tr></thead><tbody>';
+  Object.entries(byEx).forEach(([ex,sets])=>{
+    const maxW=Math.max(...sets.map(s=>s.weight));
+    const vol=sets.reduce((a,s)=>a+s.volume,0); dayVol+=vol;
+    const best=Math.max(...sets.map(s=>s.e1));
+    html+=`<tr>
+      <td class="exname">${ex}</td>
+      <td class="n">${maxW}<span class="chip">кг</span></td>
+      <td class="n">${sets.map(s=>s.reps).join(' / ')}</td>
+      <td class="n">${sets.length}</td>
+      <td class="n">${Math.round(vol)}</td>
+      <td class="n">${round1(best)}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;align-items:baseline">
+      <span style="color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.05em">Итого за день</span>
+      <span class="num" style="font-size:22px;font-weight:800;color:var(--lime)">${kg(dayVol)}</span>
+    </div>`;
+  body.innerHTML=html;
+}
+
+/* старт */
+loadData();
+</script>
+</body>
+</html>
