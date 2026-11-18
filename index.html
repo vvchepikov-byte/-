@@ -117,11 +117,11 @@
     const CONFIG = {
       API_URL: 'https://script.google.com/macros/s/AKfycbwZm5D15AbP2QEgqFuSJA3Fab9k-lbezFiMFk7uz6nAMf34BKBXBV41RACRTscZj3zW/exec',   // …/exec (тот же, что был)
       TOKEN:   '4ebb626f85a74f80aa37e877215c89dc',                 // тот же токен
-      DUE_DAYS: 5,
-      SPLIT_CORE: {
-        '🏋️ Спина + Бицепс': ['Вертикальная тяга','Тяга обратным хватом','Тяга горизонтального блока','Тяга прямыми руками','Вертикальная рычажная тяга (Тренажёр)','Вертикальная тяга (Гантель)','Тяга гантели'],
-        '🥊 Грудь + Трицепс + Плечи': ['Жим гантелей на наклонной','Жим лежа (Гантели)','Пек-дек','Жим от груди в тренажёре','Жим на плечи','Жим на трицепс'],
-        '🍗 Ноги + Пресс': ['Румынская тяга','Жим ногами','Горизонтальный жим ногами (Тренажёр)','Разгибание ног','Сгибание ног лежа (Тренажёр)','Присед (Тренажёр)']
+      DUE_DAYS: 7,
+      SPLITS: {
+        A: { name: '🅰️ День A', detail: 'Грудь + спина + квадрицепс' },
+        B: { name: '🅱️ День Б', detail: 'Спина + грудь + бицепс бедра' },
+        V: { name: '🆅 День В', detail: 'Ноги + плечи + пресс' }
       }
     };
   </script>
@@ -140,10 +140,11 @@
   <div id="errbox"></div>
 
   <section class="splits" id="splits"></section>
+  <div class="updated" id="nextWorkout" style="margin-top:-7px;margin-bottom:14px;text-align:left"></div>
 
   <section class="controls">
     <div class="ctl"><label>Упражнение</label><select id="selExercise" onchange="renderExercise()"></select></div>
-    <div class="ctl"><label>День тренировки</label><select id="selDate" onchange="renderDay()"></select></div>
+    <div class="ctl"><label>Тренировка (дата и сплит)</label><select id="selDate" onchange="renderDay()"></select></div>
   </section>
 
   <section class="panel">
@@ -161,15 +162,18 @@
 
 <script>
 let RAW = [];
+let SESSIONS = [];
 let exChart = null;
 
 function e1rm(w,r){ return w && r ? w*(1+r/30) : 0; }
-function fmtDate(iso){ const d=new Date(iso); const p=n=>('0'+n).slice(-2); return p(d.getDate())+'.'+p(d.getMonth()+1)+'.'+d.getFullYear(); }
-function ddmm(iso){ const d=new Date(iso); const p=n=>('0'+n).slice(-2); return p(d.getDate())+'.'+p(d.getMonth()+1); }
-function daysAgo(iso){ return Math.floor((Date.now()-new Date(iso))/86400000); }
+function fmtDate(iso){ const p=iso.split('-'); return p[2]+'.'+p[1]+'.'+p[0]; }
+function ddmm(iso){ const p=iso.split('-'); return p[2]+'.'+p[1]; }
+function daysAgo(iso){ const today=new Date(), date=Date.UTC(...iso.split('-').map((s,i)=>i===1?Number(s)-1:Number(s)));
+  return Math.max(0,Math.round((Date.UTC(today.getFullYear(),today.getMonth(),today.getDate())-date)/86400000)); }
 function kg(v){ return Math.round(v).toLocaleString('ru-RU')+' кг'; }
 function round1(v){ return Math.round(v*10)/10; }
 function uniq(a){ return [...new Set(a)]; }
+function safe(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 async function loadData(){
   const btn=document.getElementById('refreshBtn'), icon=document.getElementById('refreshIcon');
@@ -181,12 +185,13 @@ async function loadData(){
     const res=await fetch(url);
     const data=await res.json();
     if(data.error) throw new Error(data.error==='unauthorized'?'Неверный токен доступа.':data.error);
-    RAW=(data.rows||[]).map(x=>({ ...x, e1:e1rm(x.weight,x.reps) }));
+    RAW=(data.rows||[]).filter(x=>x.setType!=='warmup').map(x=>({ ...x, e1:e1rm(x.weight,x.reps) }));
+    SESSIONS=(data.sessions||[]).map(s=>({ ...s }));
     if(!RAW.length) throw new Error('Данных пока нет — синхронизируй Hevy в таблице.');
     document.getElementById('updated').textContent='Обновлено: '+new Date(data.updated).toLocaleString('ru-RU');
     buildAll();
   }catch(e){
-    err.innerHTML='<div class="err">⚠️ '+e.message+'</div>';
+    err.innerHTML='<div class="err">⚠️ '+safe(e.message)+'</div>';
   }finally{
     btn.disabled=false; icon.classList.remove('spin');
   }
@@ -194,37 +199,48 @@ async function loadData(){
 
 function buildAll(){ renderSplits(); fillSelectors(); renderExercise(); renderDay(); }
 
-function lastDateForExercises(list){
-  let last=null;
-  for(const x of RAW){ if(list.includes(x.exercise)){ if(!last||x.date>last) last=x.date; } }
-  return last;
-}
-
 function renderSplits(){
   const box=document.getElementById('splits'); box.innerHTML='';
-  for(const [name,core] of Object.entries(CONFIG.SPLIT_CORE)){
-    const last=lastDateForExercises(core);
-    const d = last? daysAgo(last) : null;
-    const due = d===null || d>CONFIG.DUE_DAYS;
+  const verified=SESSIONS.filter(s=>['A','B','V'].includes(s.split));
+  const recent=verified.slice().sort((a,b)=>b.date.localeCompare(a.date))[0];
+  const next=recent?({A:'B',B:'V',V:'A'})[recent.split]:'A';
+  document.getElementById('nextWorkout').textContent=recent
+    ? 'Следующий по кругу: '+CONFIG.SPLITS[next].name+' · последняя подтверждённая: '+fmtDate(recent.date)
+    : 'Нет подтверждённых дней A/Б/В. Проверь названия шаблонов Hevy и синхронизацию.';
+  for(const [id,def] of Object.entries(CONFIG.SPLITS)){
+    const last=verified.filter(x=>x.split===id).map(x=>x.date).sort().reverse()[0]||null;
+    const d=last?daysAgo(last):null;
+    const isNext=id===next;
+    const due=isNext;
     const el=document.createElement('div');
     el.className='split '+(due?'due':'ok');
-    el.innerHTML=`
-      <div class="bar"></div>
-      <span class="tag ${due?'due':'ok'}">${due?'пора':'свежо'}</span>
-      <h3>${name}</h3>
+    const tag=due?'следующий':'по кругу';
+    el.innerHTML=`<div class="bar"></div>
+      <span class="tag ${due?'due':'ok'}">${tag}</span>
+      <h3>${safe(def.name)}</h3>
       <div class="big ${due?'due':'ok'}">${d===null?'—':d}<span style="font-size:14px;color:var(--mut);font-weight:600"> ${d===null?'':'дн. назад'}</span></div>
-      <div class="sub">${last? 'последняя: '+fmtDate(last) : 'нет данных'}</div>`;
+      <div class="sub">${last?'последняя: '+fmtDate(last):'ещё не выполнен'} · ${safe(def.detail)}</div>`;
     box.appendChild(el);
   }
 }
 
 function fillSelectors(){
+  const se=document.getElementById('selExercise'), oldEx=se.value;
   const exs=uniq(RAW.map(x=>x.exercise)).sort((a,b)=>a.localeCompare(b,'ru'));
-  const dates=uniq(RAW.map(x=>x.date)).sort().reverse();
-  const se=document.getElementById('selExercise'); se.innerHTML='';
+  se.innerHTML='';
   exs.forEach(e=>{ const o=document.createElement('option'); o.value=e; o.textContent=e; se.appendChild(o); });
-  const sd=document.getElementById('selDate'); sd.innerHTML='';
-  dates.forEach(d=>{ const o=document.createElement('option'); o.value=d; o.textContent=fmtDate(d); sd.appendChild(o); });
+  if(exs.includes(oldEx))se.value=oldEx;
+
+  const sd=document.getElementById('selDate'), old=sd.value; sd.innerHTML='';
+  // Каждая тренировка Hevy — отдельный пункт, даже когда в один день две сессии.
+  SESSIONS.forEach(s=>{
+    const o=document.createElement('option'); o.value=s.id;
+    const name=s.split&&CONFIG.SPLITS[s.split]?CONFIG.SPLITS[s.split].name:
+      (s.workoutTitle || 'не определён');
+    o.textContent=fmtDate(s.date)+' · '+name;
+    sd.appendChild(o);
+  });
+  if(SESSIONS.some(s=>s.id===old))sd.value=old;
 }
 
 function renderExercise(){
@@ -276,9 +292,11 @@ function drawExChart(days){
 }
 
 function renderDay(){
-  const day=document.getElementById('selDate').value;
-  document.getElementById('dayTitle').textContent=day?fmtDate(day):'—';
-  const rows=RAW.filter(x=>x.date===day);
+  const session=SESSIONS.find(s=>s.id===document.getElementById('selDate').value);
+  const day=session?session.date:'';
+  const label=session?(session.split&&CONFIG.SPLITS[session.split]?CONFIG.SPLITS[session.split].name:(session.workoutTitle||'не определён')):'';
+  document.getElementById('dayTitle').textContent=day?fmtDate(day)+' · '+label:'—';
+  const rows=RAW.filter(x=>(x.workoutId?'w:'+x.workoutId:'legacy:'+x.date)===(session&&session.id));
   const body=document.getElementById('dayBody');
   if(!rows.length){ body.innerHTML='<div class="empty">Нет данных за этот день.</div>'; return; }
 
@@ -323,14 +341,14 @@ function renderDay(){
     }
 
     html+=`<div class="exrow">
-      <div class="exrow-head"><span class="exrow-name">${ex}</span>${delta}</div>
+      <div class="exrow-head"><span class="exrow-name">${safe(ex)}</span>${delta}</div>
       <div class="exline today"><span class="lbl">Сегодня</span><span class="val">${maxW} × ${repsStr} · <b>e1RM ${round1(todayTop)}</b></span></div>
       <div class="exline"><span class="lbl">Прошлый</span>${prevHtml}</div>
       <div class="exline"><span class="lbl">Лучший</span><span class="val">${bestHtml}</span></div>
     </div>`;
   });
   html+='</div>';
-  html+=`<div class="daytotal"><span class="l">Итого за день</span><span class="v">${kg(dayVol)}</span></div>`;
+  html+=`<div class="daytotal"><span class="l">Тоннаж тренировки</span><span class="v">${kg(dayVol)}</span></div>`;
   body.innerHTML=html;
 }
 
